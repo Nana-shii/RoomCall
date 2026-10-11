@@ -1,1 +1,36 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"roomcall-81094","appId":"1:620188125317:android:4efaf55518fc0325c041ec","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"roomcall-81094","configurations":{"android":"1:620188125317:android:4efaf55518fc0325c041ec","web":"1:620188125317:web:c2dddcb5b2737f22c041ec"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "roomcall-81094",
+          "appId": "1:620188125317:android:4efaf55518fc0325c041ec",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "roomcall-81094",
+          "configurations": {
+            "android": "1:620188125317:android:4efaf55518fc0325c041ec",
+            "web": "1:620188125317:web:c2dddcb5b2737f22c041ec"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

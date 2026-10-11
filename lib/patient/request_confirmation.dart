@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -18,7 +19,6 @@ class RequestConfirmationPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-
       appBar: AppBar(
         backgroundColor: primaryTeal,
         foregroundColor: Colors.white,
@@ -30,29 +30,16 @@ class RequestConfirmationPage extends StatelessWidget {
             fontSize: 18,
           ),
         ),
-        leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          icon: const Icon(
-            Icons.arrow_back_rounded,
-          ),
-        ),
       ),
-
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('requests')
             .doc(requestId)
             .snapshots(),
-
         builder: (context, snapshot) {
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child: CircularProgressIndicator(
-                color: primaryTeal,
-              ),
+              child: CircularProgressIndicator(color: primaryTeal),
             );
           }
 
@@ -60,86 +47,105 @@ class RequestConfirmationPage extends StatelessWidget {
             return const Center(
               child: Text(
                 'Unable to load request status.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.red,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.red),
               ),
             );
           }
 
-          if (!snapshot.hasData ||
-              !snapshot.data!.exists) {
+          if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(
               child: Text(
                 'Request not found.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.red,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.red),
               ),
             );
           }
 
-          final data =
-          snapshot.data!.data()
-          as Map<String, dynamic>;
+          final data = snapshot.data!.data() as Map<String, dynamic>;
 
-          final status =
-              data['status'] ?? 'PENDING';
+          final status = data['status']?.toString() ?? 'PENDING';
+          final patientName =
+              data['patientName']?.toString() ?? 'Unknown Patient';
+          final patientId = data['patientId']?.toString() ?? 'Unknown ID';
+          final room = data['room']?.toString() ?? 'Unknown Room';
+          final bed = data['bed']?.toString() ?? 'Unknown Bed';
+          final request = data['requestType']?.toString() ?? requestType;
 
-          return Padding(
+          late final IconData statusIcon;
+          late final Color statusColor;
+          late final String statusTitle;
+          late final String statusDescription;
+
+          switch (status) {
+            case 'ACKNOWLEDGED':
+              statusIcon = Icons.check_circle_rounded;
+              statusColor = const Color(0xFF2196F3);
+              statusTitle = 'Request Acknowledged';
+              statusDescription =
+              'A nurse has received your request and will assist you shortly.';
+              break;
+
+            case 'RESPONDING':
+              statusIcon = Icons.directions_walk_rounded;
+              statusColor = const Color(0xFFFFA726);
+              statusTitle = 'Nurse is Responding';
+              statusDescription = 'A nurse is on the way to assist you.';
+              break;
+
+            case 'COMPLETED':
+              statusIcon = Icons.check_rounded;
+              statusColor = const Color(0xFF43A047);
+              statusTitle = 'Request Completed';
+              statusDescription = 'Your request has been completed.';
+              break;
+
+            case 'PENDING':
+            default:
+              statusIcon = Icons.notifications_active_rounded;
+              statusColor = const Color(0xFFFF5252);
+              statusTitle = 'Request Sent!';
+              statusDescription =
+              'Your request for $request has been sent to the nursing staff. Please wait for assistance.';
+              break;
+          }
+
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 30),
+                const SizedBox(height: 10),
 
                 // STATUS ICON
-                Container(
-                  width: 110,
-                  height: 110,
-
-                  decoration: BoxDecoration(
-                    color: status == 'COMPLETED'
-                        ? const Color(0xFF43A047)
-                        : const Color(0xFFFF5252),
-
-                    shape: BoxShape.circle,
-
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black
-                            .withOpacity(0.08),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
-                  ),
-
-                  child: Icon(
-                    status == 'COMPLETED'
-                        ? Icons.check_rounded
-                        : Icons.notifications_active_rounded,
-                    color: Colors.white,
-                    size: 55,
+                Center(
+                  child: Container(
+                    width: 110,
+                    height: 110,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      statusIcon,
+                      color: Colors.white,
+                      size: 55,
+                    ),
                   ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 24),
 
-                // TITLE
+                // STATUS TITLE
                 Text(
-                  status == 'PENDING'
-                      ? 'Request Sent!'
-                      : status == 'ACKNOWLEDGED'
-                      ? 'Request Acknowledged'
-                      : status == 'RESPONDING'
-                      ? 'Nurse is Responding'
-                      : 'Request Completed',
-
+                  statusTitle,
                   textAlign: TextAlign.center,
-
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -151,16 +157,8 @@ class RequestConfirmationPage extends StatelessWidget {
 
                 // DESCRIPTION
                 Text(
-                  status == 'PENDING'
-                      ? 'Your request for $requestType has been sent to the nursing staff. Please wait for assistance.'
-                      : status == 'ACKNOWLEDGED'
-                      ? 'A nurse has received your request and will assist you shortly.'
-                      : status == 'RESPONDING'
-                      ? 'A nurse is on the way to assist you.'
-                      : 'Your request has been completed.',
-
+                  statusDescription,
                   textAlign: TextAlign.center,
-
                   style: const TextStyle(
                     fontSize: 15,
                     color: Colors.blueGrey,
@@ -168,126 +166,65 @@ class RequestConfirmationPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 24),
 
                 // REQUEST DETAILS
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
-
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius:
-                    BorderRadius.circular(18),
-
+                    borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black
-                            .withOpacity(0.06),
+                        color: Colors.black.withOpacity(0.06),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
                     ],
                   ),
-
                   child: Column(
                     children: [
-                      const Row(
-                        children: [
-                          Icon(
-                            Icons.bed_rounded,
-                            color: primaryTeal,
-                          ),
-                          SizedBox(width: 12),
-                          Text(
-                            'Room 302 • Bed A',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                      _detailRow(
+                        Icons.person_rounded,
+                        '$patientName ($patientId)',
                       ),
-
                       const SizedBox(height: 18),
-
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.notifications_active_rounded,
-                            color: primaryTeal,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              requestType,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                      _detailRow(
+                        Icons.bed_rounded,
+                        '$room • $bed',
                       ),
-
                       const SizedBox(height: 18),
-
-                      Row(
-                        children: [
-                          Icon(
-                            status == 'COMPLETED'
-                                ? Icons.check_circle_rounded
-                                : Icons.circle,
-                            color: status == 'COMPLETED'
-                                ? const Color(0xFF43A047)
-                                : primaryTeal,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              status,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: status ==
-                                    'COMPLETED'
-                                    ? const Color(0xFF43A047)
-                                    : primaryTeal,
-                              ),
-                            ),
-                          ),
-                        ],
+                      _detailRow(
+                        Icons.notifications_active_rounded,
+                        request,
+                      ),
+                      const SizedBox(height: 18),
+                      _detailRow(
+                        statusIcon,
+                        statusTitle,
+                        color: statusColor,
                       ),
                     ],
                   ),
                 ),
 
-                const Spacer(),
+                const SizedBox(height: 24),
 
                 // BACK BUTTON
                 SizedBox(
                   width: double.infinity,
                   height: 55,
-
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-
-                    style:
-                    ElevatedButton.styleFrom(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
                       backgroundColor: primaryTeal,
                       foregroundColor: Colors.white,
                       elevation: 0,
-
-                      shape:
-                      RoundedRectangleBorder(
-                        borderRadius:
-                        BorderRadius.circular(14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-
                     child: const Text(
                       'Back to Home',
                       style: TextStyle(
@@ -298,12 +235,35 @@ class RequestConfirmationPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 15),
+                const SizedBox(height: 10),
               ],
             ),
           );
         },
       ),
+    );
+  }
+
+  Widget _detailRow(
+      IconData icon,
+      String text, {
+        Color color = primaryTeal,
+      }) {
+    return Row(
+      children: [
+        Icon(icon, color: color),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: color == primaryTeal ? Colors.black87 : color,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

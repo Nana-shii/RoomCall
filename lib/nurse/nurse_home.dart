@@ -1,5 +1,9 @@
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import 'nurse_login_page.dart';
 
 class NurseHomePage extends StatefulWidget {
   const NurseHomePage({super.key});
@@ -12,24 +16,73 @@ class _NurseHomePageState extends State<NurseHomePage> {
   static const Color primaryTeal = Color(0xFF1B8B7F);
   static const Color background = Color(0xFFF5FFFD);
 
+  Future<void> _logout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text(
+          'Are you sure you want to logout from RoomCall?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop(false);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop(true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout != true || !mounted) return;
+
+    try {
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const NurseLoginPage(),
+        ),
+            (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to logout. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         backgroundColor: background,
-
         appBar: AppBar(
           backgroundColor: primaryTeal,
           foregroundColor: Colors.white,
           elevation: 0,
-
           title: const Row(
             children: [
-              Icon(
-                Icons.local_hospital_rounded,
-                size: 27,
-              ),
+              Icon(Icons.local_hospital_rounded, size: 27),
               SizedBox(width: 8),
               Text(
                 'Nurse Dashboard',
@@ -40,7 +93,14 @@ class _NurseHomePageState extends State<NurseHomePage> {
               ),
             ],
           ),
-
+          actions: [
+            IconButton(
+              tooltip: 'Logout',
+              onPressed: _logout,
+              icon: const Icon(Icons.logout_rounded),
+            ),
+            const SizedBox(width: 8),
+          ],
           bottom: const TabBar(
             indicatorColor: Colors.white,
             indicatorWeight: 5,
@@ -52,15 +112,10 @@ class _NurseHomePageState extends State<NurseHomePage> {
             ],
           ),
         ),
-
         body: const TabBarView(
           children: [
-            RequestList(
-              status: 'PENDING',
-            ),
-            RequestList(
-              status: 'ACTIVE',
-            ),
+            RequestList(status: 'PENDING'),
+            RequestList(status: 'ACTIVE'),
           ],
         ),
       ),
@@ -78,25 +133,79 @@ class RequestList extends StatelessWidget {
 
   static const Color primaryTeal = Color(0xFF1B8B7F);
 
+  Future<void> updateRequestStatus({
+    required BuildContext context,
+    required String requestId,
+    required String currentStatus,
+  }) async {
+    String? nextStatus;
+
+    switch (currentStatus) {
+      case 'PENDING':
+        nextStatus = 'ACKNOWLEDGED';
+        break;
+      case 'ACKNOWLEDGED':
+        nextStatus = 'RESPONDING';
+        break;
+      case 'RESPONDING':
+        nextStatus = 'COMPLETED';
+        break;
+      default:
+        return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('requests')
+          .doc(requestId)
+          .update({
+        'status': nextStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request updated to $nextStatus.'),
+          backgroundColor: primaryTeal,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to update request. Please try again.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: status == 'ACTIVE'
-          ? FirebaseFirestore.instance
-          .collection('requests')
-          .where(
-        'status',
-        whereIn: ['ACKNOWLEDGED', 'RESPONDING'],
-      )
-          .snapshots()
-          : FirebaseFirestore.instance
-          .collection('requests')
-          .where(
-        'status',
-        isEqualTo: status,
-      )
-          .snapshots(),
+    final Stream<QuerySnapshot<Map<String, dynamic>>> requestStream =
+    status == 'ACTIVE'
+        ? FirebaseFirestore.instance
+        .collection('requests')
+        .where(
+      'status',
+      whereIn: ['ACKNOWLEDGED', 'RESPONDING'],
+    )
+        .snapshots()
+        : FirebaseFirestore.instance
+        .collection('requests')
+        .where(
+      'status',
+      isEqualTo: 'PENDING',
+    )
+        .snapshots();
 
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: requestStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -108,18 +217,23 @@ class RequestList extends StatelessWidget {
 
         if (snapshot.hasError) {
           return const Center(
-            child: Text(
-              'Something went wrong.',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.red,
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Unable to load requests. Please check your connection.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.red,
+                ),
               ),
             ),
           );
         }
 
-        if (!snapshot.hasData ||
-            snapshot.data!.docs.isEmpty) {
+        final requests = snapshot.data?.docs ?? [];
+
+        if (requests.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -156,75 +270,56 @@ class RequestList extends StatelessWidget {
           );
         }
 
-        final requests = snapshot.data!.docs;
-
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: requests.length,
-
           itemBuilder: (context, index) {
             final request = requests[index];
+            final data = request.data();
 
-            final data =
-            request.data() as Map<String, dynamic>;
-
-            // Get the REAL status from Firestore.
             final requestStatus =
-                data['status'] ?? 'UNKNOWN';
-
+                data['status'] as String? ?? 'UNKNOWN';
             final room =
-                data['room'] ?? 'Unknown Room';
-
+                data['room']?.toString() ?? 'Unknown Room';
             final bed =
-                data['bed'] ?? 'Unknown Bed';
-
+                data['bed']?.toString() ?? 'Unknown Bed';
             final requestType =
-                data['requestType'] ?? 'Unknown Request';
+                data['requestType']?.toString() ?? 'Unknown Request';
 
             return Container(
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(18),
-
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
-
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
                 ],
               ),
-
               child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
-
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // REQUEST HEADER
                   Row(
                     children: [
                       Container(
                         width: 48,
                         height: 48,
-
                         decoration: BoxDecoration(
                           color: requestType == 'EMERGENCY'
                               ? const Color(0xFFFF5252)
                               : primaryTeal,
                           shape: BoxShape.circle,
                         ),
-
                         child: const Icon(
                           Icons.notifications_active_rounded,
                           color: Colors.white,
                         ),
                       ),
-
                       const SizedBox(width: 14),
-
                       Expanded(
                         child: Text(
                           requestType,
@@ -235,23 +330,17 @@ class RequestList extends StatelessWidget {
                           ),
                         ),
                       ),
-
-                      // STATUS
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 6,
                         ),
-
                         decoration: BoxDecoration(
                           color: requestStatus == 'PENDING'
                               ? const Color(0xFFFFF3CD)
                               : const Color(0xFFEAF7F5),
-
-                          borderRadius:
-                          BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-
                         child: Text(
                           requestStatus,
                           style: TextStyle(
@@ -265,87 +354,58 @@ class RequestList extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 18),
-
-                  // ROOM
                   Row(
                     children: [
                       const Icon(
                         Icons.bed_rounded,
                         color: primaryTeal,
                       ),
-
                       const SizedBox(width: 10),
-
-                      Text(
-                        '$room • $bed',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: Text(
+                          '$room • $bed',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
-                  // BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 48,
-
                     child: ElevatedButton(
-                      onPressed: () async {
-                        if (requestStatus == 'PENDING') {
-                          await FirebaseFirestore.instance
-                              .collection('requests')
-                              .doc(request.id)
-                              .update({
-                            'status': 'ACKNOWLEDGED',
-                          });
-                        }
-
-                        else if (
-                        requestStatus == 'ACKNOWLEDGED') {
-                          await FirebaseFirestore.instance
-                              .collection('requests')
-                              .doc(request.id)
-                              .update({
-                            'status': 'RESPONDING',
-                          });
-                        }
-
-                        else if (
-                        requestStatus == 'RESPONDING') {
-                          await FirebaseFirestore.instance
-                              .collection('requests')
-                              .doc(request.id)
-                              .update({
-                            'status': 'COMPLETED',
-                          });
-                        }
-                      },
-
+                      onPressed: [
+                        'PENDING',
+                        'ACKNOWLEDGED',
+                        'RESPONDING',
+                      ].contains(requestStatus)
+                          ? () => updateRequestStatus(
+                        context: context,
+                        requestId: request.id,
+                        currentStatus: requestStatus,
+                      )
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryTeal,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade300,
                         elevation: 0,
-
-                        shape:
-                        RoundedRectangleBorder(
-                          borderRadius:
-                          BorderRadius.circular(12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-
                       child: Text(
                         requestStatus == 'PENDING'
                             ? 'Acknowledge Request'
                             : requestStatus == 'ACKNOWLEDGED'
                             ? 'Start Responding'
-                            : 'Complete Request',
-
+                            : requestStatus == 'RESPONDING'
+                            ? 'Complete Request'
+                            : 'Request Completed',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,

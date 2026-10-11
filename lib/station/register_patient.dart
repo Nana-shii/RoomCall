@@ -61,7 +61,11 @@ class _RegisterPatientPageState
         'name': patientNameController.text.trim(),
         'room': roomController.text.trim(),
         'bed': bedController.text.trim(),
+
+        // Admission tracking
+        'admissionStatus': 'ADMITTED',
         'createdAt': FieldValue.serverTimestamp(),
+        'dischargedAt': null,
       });
 
       if (!mounted) return;

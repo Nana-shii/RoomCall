@@ -26,7 +26,7 @@ class RoomCallApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'RoomCall',
-      home: const StationHomePage(),
+      home: const PatientHomePage(),
     );
   }
 }

@@ -224,10 +224,6 @@ class RequestDetailsPage extends StatelessWidget {
     }
   }
 
-  // =========================
-  // STATUS COLOR
-  // =========================
-
   Color statusColor(String status) {
     if (status == 'PENDING') {
       return const Color(0xFFFFA726);
